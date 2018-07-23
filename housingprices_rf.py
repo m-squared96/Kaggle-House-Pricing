@@ -99,6 +99,12 @@ class RandomForest(object):
 
     def data_split(self,x,y):
 
+        """
+        Splits data into training and testing sets and scales
+        :param x: Data excluding target variable
+        :param y: Target variable
+        """
+
         self.xtrain, self.xtest, self.ytrain, self.ytest = train_test_split(x,y,
                 test_size=0.3, random_state=101)
 
@@ -112,7 +118,12 @@ class RandomForest(object):
 
     def rfr_construct(self,estimators):
 
-        self.regressor = RandomForestRegressor(n_estimators=estimators, random_state=0, criterion="mae")
+        """
+        Constructs a random forest regression model with a given number of estimators
+        :param estimators: n_estimators kwarg in the sklearn.ensemble.RandomForestRegressor
+        """
+
+        self.regressor = RandomForestRegressor(n_estimators=estimators, random_state=0, criterion="mse")
         self.regressor.fit(self.xtrain_scaled, self.ytrain)
 
         self.predictions = self.regressor.predict(self.xtest_scaled)
@@ -137,7 +148,7 @@ class RandomForest(object):
         plt.title("Prediction vs Actual Values")
 
         plt.figure()
-        plt.scatter(self.predictions, self.abs_errors)
+        plt.scatter(self.predictions, self.errors)
         plt.xlabel("Predicted Values")
         plt.ylabel("Absolute Difference wrt Actual")
         plt.title("Errors")
@@ -152,6 +163,13 @@ class RandomForest(object):
         submission["SalePrice"] = self.test_predictions
 
         submission.to_csv("pricing_submission.csv")
+
+    def importance(self):
+        importances = tuple(self.regressor.feature_importances_)
+        self.feature_weights = [(feature, round(importance, 5)) for feature, importance in zip(self.xtrain_scaled.columns, importances)]
+
+        for pair in self.feature_weights:
+            print(pair)
 
 
 class ModelTest():
@@ -168,10 +186,10 @@ class ModelTest():
     def minfinder(self):
 
         corrnum = int(input("Number of R iterations:  "))
-        corr_vals = np.linspace(0.00, 0.25, num=corrnum)
+        corr_vals = np.linspace(0.00, 0.1, num=corrnum)
 
         estnum = int(input("Number of estimator iterations: "))
-        estimator_list = np.linspace(10,200,num=estnum)
+        estimator_list = np.linspace(100,2000,num=estnum)
 
         total_models = corrnum*estnum
         print("Total number of models to test:", str(total_models))
@@ -229,6 +247,7 @@ class ModelTest():
 
         #self.rf.predict_test()
         self.rf.plotter()
+        self.rf.importance()
 
 tester = ModelTest()
 tester.minfinder()
