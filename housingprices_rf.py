@@ -28,25 +28,8 @@ class RandomForest(object):
 
         self.data = pd.read_csv("train.csv")
         self.data = self.data.fillna(value=0)
-        #self.data = self.data[self.data["SalePrice"] < 400000]
         self.data = self.dummy_replace(self.data)
-
-        self.test_data = pd.read_csv("test.csv").fillna(value=0)
-        self.test_ids = self.test_data["Id"]
-        self.test_data = self.test_data.drop(["Id"], axis=1)
-        self.test_data_final = self.dummy_replace(self.test_data)
-
-        self.corr_iterator()
-
-        for col in self.data.columns.drop(["Id", "SalePrice"]):
-            if col not in self.test_data_final.columns:
-                self.test_data_final[col] = np.zeros(len(self.test_ids))
-
-        for col in self.test_data_final:
-            if col not in self.data.columns:
-                self.data[col] = np.zeros(len(self.data["Id"]))
-
-
+        
     def data_prepare(self, crit_score):
 
         """
@@ -54,33 +37,10 @@ class RandomForest(object):
         :param crit_score: minimum correlation coefficient between a given array and SalePrice
         """
 
-        self.crit_score = crit_score
-        self.traindrop = ["Id", "SalePrice"]
-
-        for col in tuple(self.corr_dict.keys()):
-            if abs(self.corr_dict[col]) < self.crit_score:
-                self.traindrop.append(col)
-
-        x = self.data.drop(self.traindrop, axis=1)
+        x = self.data.drop("SalePrice", axis=1)
         y = self.data["SalePrice"]
 
         self.data_split(x,y)
-
-    def corr_iterator(self):
-
-        """
-        Generates a dictionary, where the keys are the numerical columns in
-        the dateset and their values are their correlation coefficients with
-        SalePrice
-        """
-
-        self.numericals = list(self.data.drop(["Id", "SalePrice"],
-            axis=1).select_dtypes(include=[np.number]).columns)
-        self.corr_dict = {}
-
-        for col in self.numericals:
-            self.corr_dict[col] = np.corrcoef(self.data["SalePrice"],
-                self.data[col])[0][1]
 
     def dummy_replace(self,data):
 
@@ -116,14 +76,14 @@ class RandomForest(object):
         self.xtest_scaled = pd.DataFrame(scaler.transform(self.xtest),
                 index=self.xtest.index.values, columns=self.xtest.columns.values)
 
-    def rfr_construct(self,estimators):
+    def rfr_construct(self):
 
         """
         Constructs a random forest regression model with a given number of estimators
         :param estimators: n_estimators kwarg in the sklearn.ensemble.RandomForestRegressor
         """
 
-        self.regressor = RandomForestRegressor(n_estimators=estimators, random_state=0, criterion="mse")
+        self.regressor = RandomForestRegressor(n_estimators=1000, random_state=101, criterion="mse")
         self.regressor.fit(self.xtrain_scaled, self.ytrain)
 
         self.predictions = self.regressor.predict(self.xtest_scaled)
@@ -169,7 +129,7 @@ class RandomForest(object):
         self.feature_weights = [(feature, round(importance, 5)) for feature, importance in zip(self.xtrain_scaled.columns, importances)]
 
         for pair in self.feature_weights:
-            print(pair)
+            print(pair)        
 
 
 class ModelTest():
@@ -186,12 +146,9 @@ class ModelTest():
     def minfinder(self):
 
         corrnum = int(input("Number of R iterations:  "))
-        corr_vals = np.linspace(0.00, 0.1, num=corrnum)
+        corr_vals = np.linspace(0.00, 0.5, num=corrnum)
 
-        estnum = int(input("Number of estimator iterations: "))
-        estimator_list = np.linspace(100,2000,num=estnum)
-
-        total_models = corrnum*estnum
+        total_models = corrnum
         print("Total number of models to test:", str(total_models))
 
         self.results = pd.DataFrame([],columns=["R", "Estimators", "Test Score", "Mean Error"])
@@ -203,14 +160,14 @@ class ModelTest():
 
             self.rf.data_prepare(i)
 
-            for j in estimator_list:
-                test, merr = self.rf.rfr_construct(int(j))
-                inter_results = pd.DataFrame([[i, j, test, merr]],
+            
+            test, merr = self.rf.rfr_construct()
+            inter_results = pd.DataFrame([[i, 1000, test, merr]],
                     columns=["R", "Estimators", "Test Score", "Mean Error"])
 
-                self.results = pd.concat([self.results, inter_results], ignore_index=True)
-                count += 1
-                print("Progress:", str(count*100/total_models), "%")
+            self.results = pd.concat([self.results, inter_results], ignore_index=True)
+            count += 1
+            print("Progress:", str(count*100/total_models), "%")
 
         print(self.results)
         plot_option = str(input("Generate plot of errors?(y/n)")).lower()
@@ -243,12 +200,19 @@ class ModelTest():
         print("Best MAE:", str(self.results["Mean Error"].min()))
 
         self.rf.data_prepare(best_r)
-        _,_ = self.rf.rfr_construct(int(best_est))
+        _,_ = self.rf.rfr_construct()
 
         #self.rf.predict_test()
         self.rf.plotter()
         self.rf.importance()
 
-tester = ModelTest()
-tester.minfinder()
-tester.outputter()
+def main():
+    tester = ModelTest()
+    tester.minfinder()
+    tester.outputter()
+
+def test():
+    rf = RandomForest()
+    rf.data_prepare()
+
+test()
