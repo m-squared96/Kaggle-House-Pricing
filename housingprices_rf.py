@@ -115,15 +115,6 @@ class RandomForest(object):
 
         plt.show()
 
-    def predict_test(self):
-
-        self.test_predictions = self.regressor.predict(self.test_data_final)
-        submission = pd.DataFrame([])
-        submission["Id"] = self.test_ids
-        submission["SalePrice"] = self.test_predictions
-
-        submission.to_csv("pricing_submission.csv")
-
     def importance(self):
         importances = tuple(self.regressor.feature_importances_)
         self.feature_weights = [(feature, round(importance, 5)) for feature, importance in zip(self.xtrain_scaled.columns, importances)]
