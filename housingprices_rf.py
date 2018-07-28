@@ -26,11 +26,31 @@ class RandomForest(object):
         and dummy variables
         """
 
-        self.data = pd.read_csv("train.csv")
-        self.data = self.data.fillna(value=0)
-        self.data = self.dummy_replace(self.data)
+        data = pd.read_csv("train.csv")
+        data = data.fillna(value=0)
+
+        data["OverallComb"] = data["OverallQual"] * data["OverallCond"]
+
+        remod_list = []
+
+        for i,j in zip(data["YearBuilt"], data["YearRemodAdd"]):
+            if i != j:
+                remod_list.append(1)
+
+            elif i == j:
+                remod_list.append(0)
+
+        data["RemodFlag"] = remod_list
+
+        num_data = data.select_dtypes(include=[np.number])
+        oth_data = data.drop(num_data.columns, axis=1)
+
+        data_dummies = self.dummy_replace(oth_data)
+
+        self.data = pd.concat([num_data, data_dummies], axis=1)
+        print(self.data)
         
-    def data_prepare(self, crit_score):
+    def data_prepare(self):
 
         """
         Drops uncorrelated columns and calls the data_split method
@@ -38,7 +58,8 @@ class RandomForest(object):
         """
 
         x = self.data.drop("SalePrice", axis=1)
-        y = self.data["SalePrice"]
+        #y = self.data["SalePrice"]
+        y = np.log(self.data["SalePrice"])
 
         self.data_split(x,y)
 
@@ -52,8 +73,7 @@ class RandomForest(object):
         data_predummy = data.drop(data.select_dtypes(include=[np.number]).columns, axis=1)
         data_dummy = pd.get_dummies(data_predummy)
 
-        data = pd.concat([data.drop(data_predummy.columns, axis=1),
-            data_dummy], axis=1)
+        data = pd.concat([data.drop(data_predummy.columns, axis=1),data_dummy], axis=1)
 
         return data
 
@@ -68,8 +88,7 @@ class RandomForest(object):
         self.xtrain, self.xtest, self.ytrain, self.ytest = train_test_split(x,y,
                 test_size=0.3, random_state=101)
 
-        scaler = StandardScaler().fit(self.xtrain.select_dtypes(include=[np.number]))
-
+        scaler = StandardScaler().fit(self.xtrain)
         self.xtrain_scaled = pd.DataFrame(scaler.transform(self.xtrain),
                 index=self.xtrain.index.values, columns=self.xtrain.columns.values)
 
@@ -92,7 +111,7 @@ class RandomForest(object):
         self.spearman = spearmanr(self.ytest, self.predictions)
         self.pearson = pearsonr(self.ytest, self.predictions)
 
-        self.errors = self.predictions - self.ytest
+        self.errors = 100*(self.predictions - self.ytest)/self.ytest
 
         self.abs_errors = abs(self.errors)
         self.mean_error = self.abs_errors.mean()
@@ -102,7 +121,7 @@ class RandomForest(object):
     def plotter(self):
 
         plt.figure()
-        plt.scatter(self.predictions, self.ytest)
+        plt.scatter(np.exp(self.predictions), np.exp(self.ytest))
         plt.xlabel("Predicted Values")
         plt.ylabel("Actual Values")
         plt.title("Prediction vs Actual Values")
@@ -110,7 +129,7 @@ class RandomForest(object):
         plt.figure()
         plt.scatter(self.predictions, self.errors)
         plt.xlabel("Predicted Values")
-        plt.ylabel("Absolute Difference wrt Actual")
+        plt.ylabel("Difference wrt Actual")
         plt.title("Errors")
 
         plt.show()
@@ -205,5 +224,12 @@ def main():
 def test():
     rf = RandomForest()
     rf.data_prepare()
+
+    score, merr = rf.rfr_construct()
+
+    print("Score:", str(score))
+    print("Mean Error:", str(merr) + "%")
+
+    rf.plotter()
 
 test()
