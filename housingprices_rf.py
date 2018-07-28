@@ -29,6 +29,8 @@ class RandomForest(object):
         data = pd.read_csv("train.csv")
         data = data.fillna(value=0)
 
+        #data = data[data["SalePrice"] <= 400000]
+
         data["OverallComb"] = data["OverallQual"] * data["OverallCond"]
 
         remod_list = []
@@ -57,7 +59,7 @@ class RandomForest(object):
         :param crit_score: minimum correlation coefficient between a given array and SalePrice
         """
 
-        x = self.data.drop("SalePrice", axis=1)
+        x = self.data.drop(["Id", "SalePrice"], axis=1)
         #y = self.data["SalePrice"]
         y = np.log(self.data["SalePrice"])
 
@@ -95,14 +97,14 @@ class RandomForest(object):
         self.xtest_scaled = pd.DataFrame(scaler.transform(self.xtest),
                 index=self.xtest.index.values, columns=self.xtest.columns.values)
 
-    def rfr_construct(self):
+    def rfr_construct(self, est):
 
         """
         Constructs a random forest regression model with a given number of estimators
         :param estimators: n_estimators kwarg in the sklearn.ensemble.RandomForestRegressor
         """
 
-        self.regressor = RandomForestRegressor(n_estimators=1000, random_state=101, criterion="mse")
+        self.regressor = RandomForestRegressor(n_estimators=est, random_state=101, criterion="mse")
         self.regressor.fit(self.xtrain_scaled, self.ytrain)
 
         self.predictions = self.regressor.predict(self.xtest_scaled)
@@ -121,7 +123,7 @@ class RandomForest(object):
     def plotter(self):
 
         plt.figure()
-        plt.scatter(np.exp(self.predictions), np.exp(self.ytest))
+        plt.scatter(self.predictions, self.ytest)
         plt.xlabel("Predicted Values")
         plt.ylabel("Actual Values")
         plt.title("Prediction vs Actual Values")
@@ -139,7 +141,45 @@ class RandomForest(object):
         self.feature_weights = [(feature, round(importance, 5)) for feature, importance in zip(self.xtrain_scaled.columns, importances)]
 
         for pair in self.feature_weights:
-            print(pair)        
+            print(pair)
+
+    def test_prepare(self):
+
+        test = pd.read_csv("test.csv").fillna(value=0)
+        test["OverallComb"] = test["OverallQual"] * test["OverallCond"]
+
+        remod_list = []
+        for i,j in zip(test["YearBuilt"], test["YearRemodAdd"]):
+            if i != j:
+                remod_list.append(1)
+
+            elif i == j:
+                remod_list.append(0)
+
+        test["RemodFlag"] = remod_list
+
+        num_data = test.select_dtypes(include=[np.number])
+        oth_data = test.drop(num_data.columns, axis=1)
+
+        data_dummies = self.dummy_replace(oth_data)
+        test = pd.concat([num_data, data_dummies], axis=1)
+
+        data_cols = self.data.drop("SalePrice", axis=1)
+
+        for test_col in test.columns:
+            if test_col not in data_cols:
+                test.drop(test_col, axis=1)
+
+        for train_col in data_cols:
+            if train_col not in test.columns:
+                test[train_col] = np.zeros((len(test["Id"]),1))
+
+        self.test = test
+
+    def predict(self):
+        
+        print(self.test)
+
 
 
 class ModelTest():
@@ -155,29 +195,25 @@ class ModelTest():
 
     def minfinder(self):
 
-        corrnum = int(input("Number of R iterations:  "))
-        corr_vals = np.linspace(0.00, 0.5, num=corrnum)
+        model_num = int(input("Enter number of models to be tested:   "))
+        estimators = np.linspace(500,2500,num=model_num)
 
-        total_models = corrnum
-        print("Total number of models to test:", str(total_models))
-
-        self.results = pd.DataFrame([],columns=["R", "Estimators", "Test Score", "Mean Error"])
+        self.results = pd.DataFrame([],columns=["Estimators", "Test Score", "Mean Error"])
         count = 0
 
         print("\nInitialising regression models")
 
-        for i in corr_vals:
+        self.rf.data_prepare()
 
-            self.rf.data_prepare(i)
-
+        for i in estimators:
             
-            test, merr = self.rf.rfr_construct()
-            inter_results = pd.DataFrame([[i, 1000, test, merr]],
-                    columns=["R", "Estimators", "Test Score", "Mean Error"])
+            test, merr = self.rf.rfr_construct(int(i))
+            inter_results = pd.DataFrame([[i, test, merr]],
+                    columns=["Estimators", "Test Score", "Mean Error"])
 
             self.results = pd.concat([self.results, inter_results], ignore_index=True)
             count += 1
-            print("Progress:", str(count*100/total_models), "%")
+            print("Progress:", str(count*100/model_num), "%")
 
         print(self.results)
         plot_option = str(input("Generate plot of errors?(y/n)")).lower()
@@ -187,34 +223,27 @@ class ModelTest():
     def errorplot(self):
 
         plt.figure()
-        plt.plot(self.results["R"], self.results["Test Score"], ls="--")
+        plt.plot(self.results["Estimators"], self.results["Test Score"], ls="--")
         plt.xlabel("Critical Correlation Score")
         plt.ylabel("Test Score")
         plt.title("Critical Correlation vs Test Score")
-
-        plt.figure()
-        plt.plot(self.results["R"], self.results["Mean Error"], ls="--")
-        plt.xlabel("Critical Correlation Score")
-        plt.ylabel("Mean Absolute Error")
-        plt.title("Critical Correlation vs MAE")
 
         plt.show(block=False)
 
     def outputter(self):
 
-        best_r = self.results["R"][self.results["Mean Error"].idxmin()]
         best_est = self.results["Estimators"][self.results["Mean Error"].idxmin()]
 
-        print("Best R value:", str(best_r))
         print("Best number of estimators:", str(int(best_est)))
         print("Best MAE:", str(self.results["Mean Error"].min()))
 
-        self.rf.data_prepare(best_r)
-        _,_ = self.rf.rfr_construct()
+        self.rf.data_prepare()
+        _,_ = self.rf.rfr_construct(int(best_est))
 
-        #self.rf.predict_test()
         self.rf.plotter()
         self.rf.importance()
+        self.rf.test_prepare()
+        self.rf.predict()
 
 def main():
     tester = ModelTest()
@@ -229,7 +258,9 @@ def test():
 
     print("Score:", str(score))
     print("Mean Error:", str(merr) + "%")
-
+    
     rf.plotter()
 
-test()
+    rf.importance()
+
+main()
