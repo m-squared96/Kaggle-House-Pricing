@@ -60,7 +60,6 @@ class RandomForest(object):
         """
 
         x = self.data.drop(["Id", "SalePrice"], axis=1)
-        #y = self.data["SalePrice"]
         y = np.log(self.data["SalePrice"])
 
         self.data_split(x,y)
@@ -90,11 +89,11 @@ class RandomForest(object):
         self.xtrain, self.xtest, self.ytrain, self.ytest = train_test_split(x,y,
                 test_size=0.3, random_state=101)
 
-        scaler = StandardScaler().fit(self.xtrain)
-        self.xtrain_scaled = pd.DataFrame(scaler.transform(self.xtrain),
+        self.scaler = StandardScaler().fit(self.xtrain)
+        self.xtrain_scaled = pd.DataFrame(self.scaler.transform(self.xtrain),
                 index=self.xtrain.index.values, columns=self.xtrain.columns.values)
 
-        self.xtest_scaled = pd.DataFrame(scaler.transform(self.xtest),
+        self.xtest_scaled = pd.DataFrame(self.scaler.transform(self.xtest),
                 index=self.xtest.index.values, columns=self.xtest.columns.values)
 
     def rfr_construct(self, est):
@@ -113,7 +112,7 @@ class RandomForest(object):
         self.spearman = spearmanr(self.ytest, self.predictions)
         self.pearson = pearsonr(self.ytest, self.predictions)
 
-        self.errors = 100*(self.predictions - self.ytest)/self.ytest
+        self.errors = 100*(np.exp(self.predictions) - np.exp(self.ytest))/np.exp(self.ytest)
 
         self.abs_errors = abs(self.errors)
         self.mean_error = self.abs_errors.mean()
@@ -123,13 +122,13 @@ class RandomForest(object):
     def plotter(self):
 
         plt.figure()
-        plt.scatter(self.predictions, self.ytest)
+        plt.scatter(np.exp(self.predictions), np.exp(self.ytest))
         plt.xlabel("Predicted Values")
         plt.ylabel("Actual Values")
         plt.title("Prediction vs Actual Values")
 
         plt.figure()
-        plt.scatter(self.predictions, self.errors)
+        plt.scatter(np.exp(self.predictions), np.exp(self.errors))
         plt.xlabel("Predicted Values")
         plt.ylabel("Difference wrt Actual")
         plt.title("Errors")
@@ -178,7 +177,47 @@ class RandomForest(object):
 
     def predict(self):
         
-        print(self.test)
+        self.test_ids = self.test["Id"]
+
+        self.test_scaler = StandardScaler().fit(self.test.drop("Id", axis=1))
+        self.test_scaled = pd.DataFrame(self.test_scaler.transform(self.test.drop("Id", axis=1)),
+                index=self.test.index.values, columns=self.test.drop("Id", axis=1).columns.values)
+
+        if len(self.test_scaled.columns) == len(self.xtrain.columns):
+
+            self.test_predictions = self.regressor.predict(self.test_scaled)
+            submission_frame = pd.DataFrame([])
+            submission_frame["Id"] = self.test_ids
+            submission_frame["SalePrice"] = self.test_predictions
+
+            submission_frame.to_csv("predicted_house_prices.csv", index=False)
+
+        else:
+            print("Submission document not outputted: columns do not match up")
+
+            extra_column_list = []
+
+            for col in self.test_scaled.columns:
+                if col not in self.xtrain_scaled:
+                    extra_column_list.append(col)
+
+            print("Culprits:")
+            print(extra_column_list)
+
+            self.test_scaled = self.test_scaled.drop(extra_column_list, axis=1)
+            print("Attempting again...")
+            
+            try:
+                self.test_predictions = self.regressor.predict(self.test_scaled)
+                submission_frame = pd.DataFrame([])
+                submission_frame["Id"] = self.test_ids
+                submission_frame["SalePrice"] = np.exp(self.test_predictions)
+
+                submission_frame.to_csv("predicted_house_prices.csv", index=False)
+                print("Output file produced")
+
+            except:
+                print("Failed again - aborting")
 
 
 
