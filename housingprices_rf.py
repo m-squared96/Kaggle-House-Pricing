@@ -289,17 +289,4 @@ def main():
     tester.minfinder()
     tester.outputter()
 
-def test():
-    rf = RandomForest()
-    rf.data_prepare()
-
-    score, merr = rf.rfr_construct()
-
-    print("Score:", str(score))
-    print("Mean Error:", str(merr) + "%")
-    
-    rf.plotter()
-
-    rf.importance()
-
 main()
