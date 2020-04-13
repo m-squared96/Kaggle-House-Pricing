@@ -1,3 +1,3 @@
 # Kaggle-House-Pricing
 
-My code generating my Random Forest Regression model to predict house prices
+A multi-model approach to the house pricing competition on Kaggle`
